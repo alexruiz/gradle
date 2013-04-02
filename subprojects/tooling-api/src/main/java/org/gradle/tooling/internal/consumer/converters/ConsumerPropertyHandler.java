@@ -21,10 +21,12 @@ import org.gradle.tooling.internal.adapter.MethodInvoker;
 import org.gradle.tooling.internal.consumer.versioning.VersionDetails;
 import org.gradle.tooling.internal.protocol.eclipse.EclipseProjectVersion3;
 
+import java.io.Serializable;
+
 /**
  * by Szczepan Faber, created at: 4/2/12
  */
-public class ConsumerPropertyHandler implements MethodInvoker {
+public class ConsumerPropertyHandler implements MethodInvoker, Serializable {
 
     private final VersionDetails versionDetails;
 

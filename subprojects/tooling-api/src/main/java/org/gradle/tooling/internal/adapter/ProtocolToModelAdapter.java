@@ -21,6 +21,7 @@ import org.gradle.tooling.model.DomainObjectSet;
 import org.gradle.tooling.model.internal.Exceptions;
 import org.gradle.tooling.model.internal.ImmutableDomainObjectSet;
 
+import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -29,11 +30,8 @@ import java.util.regex.Pattern;
 /**
  * Adapts some source object to some target type.
  */
-public class ProtocolToModelAdapter {
-    private static final MethodInvoker NO_OP_HANDLER = new MethodInvoker() {
-        public void invoke(MethodInvocation invocation) throws Throwable {
-        }
-    };
+public class ProtocolToModelAdapter implements Serializable {
+    private static final MethodInvoker NO_OP_HANDLER = new NoOpMethodInvoker();
     public static final TargetTypeProvider IDENTITY_TYPE_PROVIDER = new TargetTypeProvider() {
         public <T> Class<? extends T> getTargetType(Class<T> initialTargetType, Object protocolObject) {
             return initialTargetType;
@@ -82,26 +80,18 @@ public class ProtocolToModelAdapter {
         return proxy;
     }
 
-    private class InvocationHandlerImpl implements InvocationHandler {
+    private static class NoOpMethodInvoker implements MethodInvoker, Serializable {
+        public void invoke(MethodInvocation invocation) throws Throwable {
+        }
+    }
+
+    private class InvocationHandlerImpl implements InvocationHandler, Serializable {
         private final Object delegate;
-        private final Method equalsMethod;
-        private final Method hashCodeMethod;
-        private final MethodInvoker invoker;
+        private final MethodInvoker overrideMethodInvoker;
 
         public InvocationHandlerImpl(Object delegate, MethodInvoker overrideMethodInvoker) {
             this.delegate = delegate;
-            invoker = new SupportedPropertyInvoker(
-                    new SafeMethodInvoker(
-                            new PropertyCachingMethodInvoker(
-                                    new ChainedMethodInvoker(
-                                            overrideMethodInvoker,
-                                            new ReflectionMethodInvoker(overrideMethodInvoker)))));
-            try {
-                equalsMethod = Object.class.getMethod("equals", Object.class);
-                hashCodeMethod = Object.class.getMethod("hashCode");
-            } catch (NoSuchMethodException e) {
-                throw UncheckedException.throwAsUncheckedException(e);
-            }
+            this.overrideMethodInvoker = overrideMethodInvoker;
         }
 
         @Override
@@ -123,25 +113,51 @@ public class ProtocolToModelAdapter {
         }
 
         public Object invoke(Object target, Method method, Object[] params) throws Throwable {
-            if (method.equals(equalsMethod)) {
+            if (method.equals(equalsMethod())) {
                 Object param = params[0];
                 if (param == null || !Proxy.isProxyClass(param.getClass())) {
                     return false;
                 }
                 InvocationHandler other = Proxy.getInvocationHandler(param);
                 return equals(other);
-            } else if (method.equals(hashCodeMethod)) {
+            } else if (method.equals(hashCodeMethod())) {
                 return hashCode();
             }
 
             MethodInvocation invocation = new MethodInvocation(method.getName(), method.getReturnType(), method.getGenericReturnType(), method.getParameterTypes(), delegate, params);
-            invoker.invoke(invocation);
+            invoker().invoke(invocation);
             if (!invocation.found()) {
                 String methodName = method.getDeclaringClass().getSimpleName() + "." + method.getName() + "()";
                 throw Exceptions.unsupportedMethod(methodName);
             }
             return invocation.getResult();
         }
+
+        private Method equalsMethod() {
+            try {
+                return Object.class.getMethod("equals", Object.class);
+            } catch (NoSuchMethodException e) {
+                throw UncheckedException.throwAsUncheckedException(e);
+            }
+        }
+
+        private Method hashCodeMethod() {
+            try {
+                return Object.class.getMethod("hashCode");
+            } catch (NoSuchMethodException e) {
+                throw UncheckedException.throwAsUncheckedException(e);
+            }
+        }
+
+        private SupportedPropertyInvoker invoker() {
+            return new SupportedPropertyInvoker(
+                    new SafeMethodInvoker(
+                            new PropertyCachingMethodInvoker(
+                                    new ChainedMethodInvoker(
+                                            overrideMethodInvoker,
+                                            new ReflectionMethodInvoker(overrideMethodInvoker)))));
+        }
+
     }
 
     private static class ChainedMethodInvoker implements MethodInvoker {

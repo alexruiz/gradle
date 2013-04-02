@@ -19,10 +19,12 @@ package org.gradle.tooling.internal.consumer.versioning;
 import org.gradle.api.Nullable;
 import org.gradle.tooling.internal.protocol.ModelIdentifier;
 
+import java.io.Serializable;
+
 /**
  * by Szczepan Faber, created at: 1/13/12
  */
-public abstract class VersionDetails {
+public abstract class VersionDetails implements Serializable {
     private final String providerVersion;
 
     public VersionDetails(String version) {

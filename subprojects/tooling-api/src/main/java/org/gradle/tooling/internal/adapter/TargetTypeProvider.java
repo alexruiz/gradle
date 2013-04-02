@@ -16,7 +16,9 @@
 
 package org.gradle.tooling.internal.adapter;
 
-public interface TargetTypeProvider {
+import java.io.Serializable;
+
+public interface TargetTypeProvider extends Serializable {
     /**
      * Determines the model type to use to wrap the given protocol object.
      */
